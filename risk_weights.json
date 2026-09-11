@@ -1,0 +1,11 @@
+{
+  "auth_weight": 0.20,
+  "geo_weight": 0.20,
+  "nlp_weight": 0.30,
+  "reputation_weight": 0.30,
+  "thresholds": {
+    "low_max": 29,
+    "medium_max": 59,
+    "high_max": 84
+  }
+}

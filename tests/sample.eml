@@ -1,0 +1,44 @@
+Message-ID: <test12345@example.com>
+Date: Fri, 4 Sep 2026 12:00:00 +0000
+From: "Alice Sender" <alice@example.com>
+To: "Bob Receiver" <bob@example.com>
+Reply-To: alice-alt@example.com
+Subject: Test Email with Attachments and Links
+Received: from mail.example.com (mail.example.com [192.168.1.1])
+    by mx.example.com with SMTP id 12345
+    for <bob@example.com>; Fri, 4 Sep 2026 12:00:00 +0000
+Received: from localhost by mail.example.com
+    for <bob@example.com>; Fri, 4 Sep 2026 11:59:50 +0000
+Content-Type: multipart/mixed; boundary="boundary-12345"
+
+--boundary-12345
+Content-Type: multipart/alternative; boundary="boundary-alt-12345"
+
+--boundary-alt-12345
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Hello Bob,
+Check out this link: https://example.com/threat
+Also visit www.test.com.
+
+--boundary-alt-12345
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+<html>
+<body>
+<p>Hello Bob,</p>
+<p>Check out this <a href="https://example.com/threat">link</a>.</p>
+<p>Also visit <a href="http://www.test.com">www.test.com</a>.</p>
+</body>
+</html>
+--boundary-alt-12345--
+
+--boundary-12345
+Content-Type: text/plain; name="malware.txt"
+Content-Disposition: attachment; filename="malware.txt"
+Content-Transfer-Encoding: 7bit
+
+This is a dangerous attachment!
+--boundary-12345--
