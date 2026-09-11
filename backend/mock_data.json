@@ -1,0 +1,356 @@
+[
+  {
+    "message_id": "msg-2026-001",
+    "subject": "URGENT: Executive Wire Transfer Authorization #WT-90218",
+    "from": "ceo-office@bank-corp-exec.ru",
+    "date": "2026-09-11T13:45:00Z",
+    "risk_score": 99.47,
+    "risk_tier": "critical",
+    "contributing_factors": [
+      "SPF FAIL",
+      "DKIM FAIL",
+      "DMARC FAIL (policy: none)",
+      "Display name spoofing: CEO Impersonation",
+      "Geolocation anomaly: Impossible travel detected (3100 km/h)",
+      "NLP phishing probability 99% (terms: wire, transfer, urgent, immediate)",
+      "URL flagged malicious by VirusTotal (8/72 vendors)"
+    ],
+    "geolocation": {
+      "country": "RU",
+      "city": "Moscow",
+      "lat": 55.7558,
+      "long": 37.6173
+    }
+  },
+  {
+    "message_id": "msg-2026-002",
+    "subject": "CRITICAL: Your Microsoft 365 Session Has Expired - Re-authenticate Immediately",
+    "from": "security-alert@microsoft-auth-verify.com",
+    "date": "2026-09-11T12:20:15Z",
+    "risk_score": 96.15,
+    "risk_tier": "critical",
+    "contributing_factors": [
+      "SPF FAIL",
+      "DKIM FAIL",
+      "DMARC FAIL (policy: none)",
+      "NLP phishing probability 97% (terms: microsoft, session, expired, re-authenticate)",
+      "Safe Browsing flagged phishing credential harvester: https://microsoft-auth-verify.com/login",
+      "VirusTotal malicious (14/72 vendors)"
+    ],
+    "geolocation": {
+      "country": "RO",
+      "city": "Bucharest",
+      "lat": 44.4268,
+      "long": 26.1025
+    }
+  },
+  {
+    "message_id": "msg-2026-003",
+    "subject": "Payroll Direct Deposit Account Confirmation Required Before 5 PM",
+    "from": "hr-payroll@corp-workday-portal.com",
+    "date": "2026-09-11T11:12:45Z",
+    "risk_score": 95.80,
+    "risk_tier": "critical",
+    "contributing_factors": [
+      "Originating IP identified as Tor exit node (anonymized proxy)",
+      "SPF FAIL",
+      "DKIM None",
+      "DMARC domain misalignment",
+      "NLP phishing probability 96% (terms: payroll, direct deposit, confirmation)"
+    ],
+    "geolocation": null
+  },
+  {
+    "message_id": "msg-2026-004",
+    "subject": "Overdue Payment Notice: Immediate Legal Action Pending [Invoice_8912.pdf.exe]",
+    "from": "billing-legal@accounts-receivable-global.cn",
+    "date": "2026-09-11T10:15:30Z",
+    "risk_score": 92.40,
+    "risk_tier": "critical",
+    "contributing_factors": [
+      "Attachment 'Invoice_8912.pdf.exe' flagged malicious (18/72 vendors)",
+      "Double extension payload detected",
+      "SPF Softfail",
+      "DKIM FAIL",
+      "NLP phishing probability 92% (terms: overdue, legal, invoice)"
+    ],
+    "geolocation": {
+      "country": "CN",
+      "city": "Shenzhen",
+      "lat": 22.5431,
+      "long": 114.0579
+    }
+  },
+  {
+    "message_id": "msg-2026-005",
+    "subject": "Urgent Notification: Unauthorized Access Detected from Nigeria",
+    "from": "security@secure-portal-update.org",
+    "date": "2026-09-11T09:05:00Z",
+    "risk_score": 88.65,
+    "risk_tier": "critical",
+    "contributing_factors": [
+      "Geolocation anomaly: Unusual originating ASN",
+      "Reply-To mismatch (security@secure-portal-update.org vs collector99@evil.ng)",
+      "URL flagged by Safe Browsing (MALWARE)",
+      "NLP phishing probability 89%"
+    ],
+    "geolocation": {
+      "country": "NG",
+      "city": "Lagos",
+      "lat": 6.5244,
+      "long": 3.3792
+    }
+  },
+  {
+    "message_id": "msg-2026-006",
+    "subject": "Tax Filing Audit Notification - IRS Form 1040 Documentation Required",
+    "from": "irs-internal-revenue@tax-review-audit.gov.us.co",
+    "date": "2026-09-11T07:30:10Z",
+    "risk_score": 82.90,
+    "risk_tier": "high",
+    "contributing_factors": [
+      "Typo-squatted government domain (.gov.us.co)",
+      "SPF Pass (rogue domain)",
+      "DKIM Pass",
+      "NLP phishing probability 88% (terms: irs, audit, form, penalty)",
+      "VirusTotal suspicious URL"
+    ],
+    "geolocation": {
+      "country": "NL",
+      "city": "Amsterdam",
+      "lat": 52.3676,
+      "long": 4.9041
+    }
+  },
+  {
+    "message_id": "msg-2026-007",
+    "subject": "Shipping Exception: Reschedule Delivery for Shipment #DHL-889124",
+    "from": "delivery-tracking@dhl-express-reschedule.com",
+    "date": "2026-09-10T22:45:00Z",
+    "risk_score": 78.40,
+    "risk_tier": "high",
+    "contributing_factors": [
+      "Brand impersonation: DHL Express",
+      "SPF Softfail",
+      "Embedded shortened tracking URL (bit.ly/dhl-track-91)",
+      "Safe Browsing flagged deceptive link"
+    ],
+    "geolocation": {
+      "country": "DE",
+      "city": "Frankfurt",
+      "lat": 50.1109,
+      "long": 8.6821
+    }
+  },
+  {
+    "message_id": "msg-2026-008",
+    "subject": "Internal IT: Mandatory VPN Client Upgrade for Remote Workers",
+    "from": "it-support@company-helpdesk-update.net",
+    "date": "2026-09-10T20:10:00Z",
+    "risk_score": 71.85,
+    "risk_tier": "high",
+    "contributing_factors": [
+      "Display name spoofing: Corporate IT Helpdesk",
+      "Geolocation anomaly: Speed 1420 km/h from last known office IP",
+      "Attachment 'VPN_Installer_v4.2.iso' flagged suspicious (2/72 vendors)"
+    ],
+    "geolocation": {
+      "country": "GB",
+      "city": "London",
+      "lat": 51.5074,
+      "long": -0.1278
+    }
+  },
+  {
+    "message_id": "msg-2026-009",
+    "subject": "Action Required: Verify Shared OneDrive Folder 'Confidential Financial Q3'",
+    "from": "sharepoint-notify@onedrive-corporate-docs.com",
+    "date": "2026-09-10T18:05:22Z",
+    "risk_score": 64.10,
+    "risk_tier": "high",
+    "contributing_factors": [
+      "DKIM FAIL",
+      "DMARC FAIL (policy: none)",
+      "NLP phishing probability 74% (terms: shared, onedrive, confidential)",
+      "Suspicious redirect chain detected"
+    ],
+    "geolocation": {
+      "country": "BR",
+      "city": "São Paulo",
+      "lat": -23.5505,
+      "long": -46.6333
+    }
+  },
+  {
+    "message_id": "msg-2026-010",
+    "subject": "Contract Addendum #CA-410 for Review and Electronic Signature",
+    "from": "docusign-notifications@external-contracts-sign.com",
+    "date": "2026-09-10T15:20:00Z",
+    "risk_score": 55.20,
+    "risk_tier": "medium",
+    "contributing_factors": [
+      "Lookalike DocuSign sender domain",
+      "SPF Pass",
+      "DKIM Pass",
+      "NLP phishing probability 62%",
+      "URL redirects to external non-DocuSign domain"
+    ],
+    "geolocation": {
+      "country": "JP",
+      "city": "Tokyo",
+      "lat": 35.6762,
+      "long": 139.6503
+    }
+  },
+  {
+    "message_id": "msg-2026-011",
+    "subject": "Notice of System Downtime and Password Sync Schedule",
+    "from": "sysadmin-alerts@partner-network-ops.org",
+    "date": "2026-09-10T13:10:45Z",
+    "risk_score": 49.75,
+    "risk_tier": "medium",
+    "contributing_factors": [
+      "SPF Unknown",
+      "DMARC None",
+      "Unregistered external sender claiming internal admin status",
+      "NLP phishing probability 52%"
+    ],
+    "geolocation": null
+  },
+  {
+    "message_id": "msg-2026-012",
+    "subject": "Invitation to Connect: New Industry Collaboration Portal",
+    "from": "partnerships@b2b-executive-connect.io",
+    "date": "2026-09-10T11:40:00Z",
+    "risk_score": 42.18,
+    "risk_tier": "medium",
+    "contributing_factors": [
+      "Aggressive marketing tracker pixels detected",
+      "Newly registered domain (< 7 days old)",
+      "DKIM Pass",
+      "SPF Pass"
+    ],
+    "geolocation": {
+      "country": "SG",
+      "city": "Singapore",
+      "lat": 1.3521,
+      "long": 103.8198
+    }
+  },
+  {
+    "message_id": "msg-2026-013",
+    "subject": "Your Electronic Receipt for Order #AMZ-7782103",
+    "from": "order-confirmation@digital-goods-distributor.com",
+    "date": "2026-09-10T09:15:30Z",
+    "risk_score": 34.50,
+    "risk_tier": "medium",
+    "contributing_factors": [
+      "SPF Pass",
+      "DKIM Pass",
+      "Mismatched vendor identity",
+      "Embedded generic support phone number"
+    ],
+    "geolocation": {
+      "country": "CA",
+      "city": "Toronto",
+      "lat": 43.6532,
+      "long": -79.3832
+    }
+  },
+  {
+    "message_id": "msg-2026-014",
+    "subject": "Weekly Cloud Infrastructure Cost Optimization Summary",
+    "from": "cost-alerts@aws-finops.company.com",
+    "date": "2026-09-10T08:00:10Z",
+    "risk_score": 24.80,
+    "risk_tier": "low",
+    "contributing_factors": [
+      "Minor header anomaly: X-Mailer non-standard",
+      "SPF Pass",
+      "DKIM Pass",
+      "DMARC Pass (aligned)"
+    ],
+    "geolocation": {
+      "country": "US",
+      "city": "Seattle",
+      "lat": 47.6062,
+      "long": -122.3321
+    }
+  },
+  {
+    "message_id": "msg-2026-015",
+    "subject": "GitHub Security Advisory: Dependabot alert in frontend-ui repository",
+    "from": "notifications@github.com",
+    "date": "2026-09-09T21:30:00Z",
+    "risk_score": 18.60,
+    "risk_tier": "low",
+    "contributing_factors": [
+      "SPF Pass",
+      "DKIM Pass",
+      "DMARC Pass (aligned)",
+      "Clean reputation across all vendors"
+    ],
+    "geolocation": {
+      "country": "US",
+      "city": "San Francisco",
+      "lat": 37.7749,
+      "long": -122.4194
+    }
+  },
+  {
+    "message_id": "msg-2026-016",
+    "subject": "All-Hands Meeting Minutes & Q3 Engineering Roadmap Slides",
+    "from": "engineering-lead@company.com",
+    "date": "2026-09-09T18:00:00Z",
+    "risk_score": 12.10,
+    "risk_tier": "low",
+    "contributing_factors": [
+      "Fully authenticated internal email",
+      "SPF Pass",
+      "DKIM Pass",
+      "DMARC Pass (aligned)",
+      "No external links"
+    ],
+    "geolocation": {
+      "country": "US",
+      "city": "New York",
+      "lat": 40.7128,
+      "long": -74.0060
+    }
+  },
+  {
+    "message_id": "msg-2026-017",
+    "subject": "Daily Automated Database Backup Verification Report - Success",
+    "from": "backup-daemon@internal.cloud.net",
+    "date": "2026-09-09T04:00:00Z",
+    "risk_score": 4.25,
+    "risk_tier": "low",
+    "contributing_factors": [
+      "Internal automated cron notification",
+      "SPF Pass",
+      "DKIM Pass",
+      "Clean"
+    ],
+    "geolocation": {
+      "country": "AU",
+      "city": "Sydney",
+      "lat": -33.8688,
+      "long": 151.2093
+    }
+  },
+  {
+    "message_id": "msg-2026-018",
+    "subject": "Calendar Invitation: Weekly Sprint Planning & Retrospective",
+    "from": "scrum-master@company.com",
+    "date": "2026-09-09T02:30:00Z",
+    "risk_score": 2.14,
+    "risk_tier": "low",
+    "contributing_factors": [
+      "Internal Google Calendar automated invite",
+      "SPF Pass",
+      "DKIM Pass",
+      "Clean"
+    ],
+    "geolocation": null
+  }
+]
