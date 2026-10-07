@@ -1,5 +1,8 @@
+import logging
 import threading
 import time
+
+logger = logging.getLogger(__name__)
 
 
 class RateLimiter:
@@ -25,6 +28,7 @@ class RateLimiter:
                 oldest = self._calls[0]
                 wait = self.period - (now - oldest)
                 if wait > 0:
+                    logger.info("Rate limiter holding: waiting %.1fs for next request slot...", wait)
                     time.sleep(wait)
                 # Refresh after sleeping
                 now = time.monotonic()
