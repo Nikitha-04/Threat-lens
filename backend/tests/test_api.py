@@ -2,18 +2,52 @@
 Unit and integration tests for FastAPI backend.
 Tests /api/alerts, /api/alerts/{message_id}, schema validation, and 404 behavior.
 """
+import json
+import os
+import shutil
+import tempfile
 import pytest
 from fastapi.testclient import TestClient
 
 try:
-    from backend.main import app
+    from backend.main import app, DASHBOARD_DATA_DIR
 except ModuleNotFoundError:
     import sys
-    import os
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-    from main import app
+    from main import app, DASHBOARD_DATA_DIR
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def setup_test_dashboard(monkeypatch, tmp_path):
+    """
+    Ensure API tests have a populated test dashboard directory by default,
+    while allowing tests to override with empty directories.
+    """
+    mock_path = os.path.join(os.path.dirname(__file__), "..", "mock_data.json")
+    test_dash = tmp_path / "dashboard"
+    test_dash.mkdir(exist_ok=True)
+    if os.path.exists(mock_path):
+        with open(mock_path, "r", encoding="utf-8") as f:
+            items = json.load(f)
+        for item in items:
+            out_file = test_dash / f"{item['message_id']}.json"
+            out_file.write_text(json.dumps(item), encoding="utf-8")
+
+    monkeypatch.setattr("backend.main.DASHBOARD_DATA_DIR", str(test_dash))
+    yield str(test_dash)
+
+
+def test_empty_dashboard_directory(monkeypatch, tmp_path):
+    """Verify backend handles empty dashboard directory gracefully."""
+    empty_dash = tmp_path / "empty_dash"
+    empty_dash.mkdir()
+    monkeypatch.setattr("backend.main.DASHBOARD_DATA_DIR", str(empty_dash))
+
+    response = client.get("/api/alerts")
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_health_check():

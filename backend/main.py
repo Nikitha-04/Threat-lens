@@ -4,6 +4,7 @@ Serves risk-scored email alerts with geolocation and threat indicators.
 """
 from __future__ import annotations
 
+import glob
 import json
 import os
 from enum import Enum
@@ -33,7 +34,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MOCK_DATA_PATH = os.path.join(os.path.dirname(__file__), "mock_data.json")
+DASHBOARD_DATA_DIR = os.environ.get(
+    "THREATLENS_DASHBOARD_DIR",
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "dashboard"))
+)
 
 
 class RiskTier(str, Enum):
@@ -63,15 +67,23 @@ class Alert(BaseModel):
     geolocation: Optional[Geolocation] = None
 
 
-def load_alerts() -> List[dict]:
+def load_alerts(dashboard_dir: Optional[str] = None) -> List[dict]:
     """
-    Load alerts from mock_data.json.
-    To swap to real Task 6 API/data pipeline later, update this function.
+    Load alerts from real pipeline outputs in ./data/dashboard/*.json.
+    Gracefully returns empty list if directory is empty or missing.
     """
-    if not os.path.exists(MOCK_DATA_PATH):
+    target_dir = dashboard_dir or DASHBOARD_DATA_DIR
+    if not os.path.exists(target_dir):
         return []
-    with open(MOCK_DATA_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+
+    alerts = []
+    for filepath in sorted(glob.glob(os.path.join(target_dir, "*.json"))):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                alerts.append(json.load(f))
+        except Exception:
+            continue
+    return alerts
 
 
 @app.get("/api/health")
