@@ -35,7 +35,7 @@ export const ThreatMap: React.FC<ThreatMapProps> = ({
     });
 
     // Dark-themed tiles for cybersecurity dashboard
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       subdomains: 'abcd',
     }).addTo(map);
