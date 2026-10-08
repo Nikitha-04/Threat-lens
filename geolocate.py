@@ -143,8 +143,10 @@ def main():
     db = Database()
     maxmind = MaxMindClient()
     if not maxmind.reader:
-        print("Using mock MaxMind for demonstration since DB is missing.")
-        maxmind = MockMaxMind()
+        raise FileNotFoundError(
+            "MaxMind GeoLite2 database missing. Required for geolocation. "
+            "Please download GeoLite2-City.mmdb into ./data/geoip/ or configure MAXMIND_DB_PATH in .env."
+        )
     
     input_files = sorted(glob.glob(os.path.join(args.input_dir, "*.json")))
     

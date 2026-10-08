@@ -19,24 +19,39 @@ def _iso(dt: datetime) -> str:
 
 
 def _overall_flag(url_checks: list, attachment_checks: list) -> str:
+    if not url_checks and not attachment_checks:
+        return "unknown"
+
+    has_suspicious = False
+    has_unverified = False
+
     for uc in url_checks:
-        if uc["safe_browsing_flagged"]:
+        if uc.get("safe_browsing_flagged"):
             return "malicious"
-        mal = uc.get("virustotal_malicious_count") or 0
-        sus = uc.get("virustotal_suspicious_count") or 0
-        if mal >= 3:
-            return "malicious"
-        if mal >= 1 or sus >= 3:
-            return "suspicious"
+        mal = uc.get("virustotal_malicious_count")
+        sus = uc.get("virustotal_suspicious_count")
+        if mal is not None:
+            if mal >= 3:
+                return "malicious"
+            elif mal >= 1 or (sus is not None and sus >= 3):
+                has_suspicious = True
+        else:
+            has_unverified = True
 
     for ac in attachment_checks:
-        mal = ac.get("virustotal_malicious_count") or 0
-        if mal >= 3:
-            return "malicious"
-        if mal >= 1:
-            return "suspicious"
+        mal = ac.get("virustotal_malicious_count")
+        if mal is not None:
+            if mal >= 3:
+                return "malicious"
+            elif mal >= 1:
+                has_suspicious = True
+        else:
+            has_unverified = True
 
-    if not url_checks and not attachment_checks:
+    if has_suspicious:
+        return "suspicious"
+    if has_unverified:
+        # A check genuinely failed or could not be verified — never mark clean!
         return "unknown"
     return "clean"
 
@@ -79,7 +94,12 @@ def _attachment_check_record(filename: str, sha256: str,
 
 def process_email(data: dict, cache: ReputationCache) -> dict:
     message_id = data.get("message_id", "unknown")
-    links = data.get("links", [])
+    raw_links = data.get("links", [])
+    # Strictly filter to valid web URLs (http:// and https://) — ignores mailto: and non-web links
+    links = [
+        u.strip() for u in raw_links
+        if isinstance(u, str) and u.strip().lower().startswith(("http://", "https://"))
+    ]
     attachments = data.get("attachments", [])
 
     url_checks: list[dict] = []

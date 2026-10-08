@@ -202,14 +202,16 @@ def process_single_email(
         g = geo["geolocation"]
         if (
             g.get("country") is not None
-            and g.get("city") is not None
             and g.get("lat") is not None
             and g.get("long") is not None
         ):
             try:
+                city_name = g.get("city")
+                if not city_name or str(city_name).strip() == "":
+                    city_name = str(g.get("country") or "Unknown")
                 geolocation_data = {
                     "country": str(g["country"]),
-                    "city": str(g["city"]),
+                    "city": str(city_name),
                     "lat": float(g["lat"]),
                     "long": float(g["long"]),
                 }
@@ -255,8 +257,11 @@ def run_pipeline(
     maxmind_path = os.environ.get("MAXMIND_DB_PATH", "./data/geoip/GeoLite2-City.mmdb")
     maxmind = MaxMindClient(maxmind_path)
     if not maxmind.reader:
-        logger.warning("MaxMind DB not found at %s. Falling back to MockMaxMind.", maxmind_path)
-        maxmind = MockMaxMind()
+        raise FileNotFoundError(
+            f"Required MaxMind GeoLite2 database missing at '{maxmind_path}'. "
+            "Mock fallbacks are disabled. Ensure GeoLite2-City.mmdb exists in ./data/geoip/ "
+            "or configure MAXMIND_DB_PATH in your .env file."
+        )
 
     rep_cache = ReputationCache(db_path)
 

@@ -57,14 +57,14 @@ def _get(url: str, params: dict | None = None, retries: int = 2) -> dict | None:
     return None
 
 
-def _post(url: str, json_body: dict) -> dict | None:
+def _post(url: str, data: dict) -> dict | None:
     global _DAILY_QUOTA_EXCEEDED
     if _DAILY_QUOTA_EXCEEDED:
         return None
 
     _limiter.acquire()
     try:
-        resp = requests.post(url, headers=_headers(), json=json_body, timeout=15)
+        resp = requests.post(url, headers=_headers(), data=data, timeout=15)
     except requests.RequestException as exc:
         logger.error("VirusTotal POST error: %s", exc)
         return None
@@ -74,19 +74,22 @@ def _post(url: str, json_body: dict) -> dict | None:
     if resp.status_code == 429:
         logger.warning("VirusTotal 429 on POST.")
         return None
-    logger.error("VirusTotal POST status %s", resp.status_code)
+    logger.error("VirusTotal POST status %s: %s", resp.status_code, resp.text[:200])
     return None
 
 
 def _extract_stats(data: dict) -> tuple[int | None, int | None, int | None]:
     """Returns (malicious, suspicious, total_vendors) from a VT analysis attributes dict."""
     try:
-        stats = data["data"]["attributes"]["last_analysis_stats"]
+        attrs = data.get("data", {}).get("attributes", {})
+        stats = attrs.get("last_analysis_stats") or attrs.get("stats")
+        if not stats or not isinstance(stats, dict):
+            return None, None, None
         malicious = stats.get("malicious", 0)
         suspicious = stats.get("suspicious", 0)
-        total = sum(stats.values())
+        total = sum(v for v in stats.values() if isinstance(v, (int, float)))
         return malicious, suspicious, total
-    except (KeyError, TypeError):
+    except (KeyError, TypeError, Exception):
         return None, None, None
 
 

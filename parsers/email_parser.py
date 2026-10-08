@@ -16,7 +16,9 @@ def extract_links(text, html):
         try:
             soup = BeautifulSoup(html, 'html.parser')
             for a in soup.find_all('a', href=True):
-                extracted.add(a['href'])
+                href = a['href'].strip()
+                if href.lower().startswith(('http://', 'https://')):
+                    extracted.add(href)
         except Exception:
             pass
     
