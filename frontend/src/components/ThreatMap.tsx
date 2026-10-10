@@ -116,7 +116,7 @@ export const ThreatMap: React.FC<ThreatMapProps> = ({
             From: <strong>${escapeHtml(alert.from)}</strong>
           </div>
           <div style="font-size: 11px; color: #64748b; margin-bottom: 10px;">
-            📍 ${escapeHtml(city)}, ${escapeHtml(country)} (${lat.toFixed(2)}, ${long.toFixed(2)})
+            📍 ${escapeHtml(city ? `${city}, ${country}` : country)} (${lat.toFixed(2)}, ${long.toFixed(2)})
           </div>
           <button id="view-alert-${alert.message_id}" style="
             width: 100%;
