@@ -79,8 +79,8 @@ export const AlertFeed: React.FC<AlertFeedProps> = ({
                 <div className="alert-card-footer">
                   <div className="footer-meta">
                     {alert.geolocation ? (
-                      <span className="geo-tag" title={`${alert.geolocation.city}, ${alert.geolocation.country}`}>
-                        <MapPin size={11} /> {alert.geolocation.city}, {alert.geolocation.country}
+                      <span className="geo-tag" title={alert.geolocation.city ? `${alert.geolocation.city}, ${alert.geolocation.country}` : alert.geolocation.country}>
+                        <MapPin size={11} /> {alert.geolocation.city ? `${alert.geolocation.city}, ${alert.geolocation.country}` : alert.geolocation.country}
                       </span>
                     ) : (
                       <span className="geo-tag muted">

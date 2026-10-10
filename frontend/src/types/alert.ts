@@ -2,7 +2,7 @@ export type RiskTier = 'low' | 'medium' | 'high' | 'critical';
 
 export interface Geolocation {
   country: string;
-  city: string;
+  city: string | null;
   lat: number;
   long: number;
 }

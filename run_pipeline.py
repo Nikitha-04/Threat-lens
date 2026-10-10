@@ -57,6 +57,18 @@ def format_sender(from_val) -> str:
     return "unknown"
 
 
+def decode_subject(subject_val: str | None) -> str:
+    """Decode RFC 2047 encoded subject to clean unicode text."""
+    if not subject_val:
+        return "(No Subject)"
+    try:
+        from email.header import decode_header, make_header
+        decoded = str(make_header(decode_header(str(subject_val)))).strip()
+        return decoded or "(No Subject)"
+    except Exception:
+        return str(subject_val).strip() or "(No Subject)"
+
+
 def ensure_directories(base_dir: str = "./data") -> dict[str, str]:
     """Ensure all required pipeline directories exist and return their paths."""
     dirs = {
@@ -156,6 +168,21 @@ def process_single_email(
         rep_path = os.path.join(dirs["reputation"], f"{safe_id}.json")
         with open(rep_path, "w", encoding="utf-8") as f:
             json.dump(reputation, f, indent=2, ensure_ascii=False)
+        for uc in reputation.get("url_checks", []):
+            url_str = uc.get("url", "")
+            sb_flag = "FLAGGED" if uc.get("safe_browsing_flagged") else "clean"
+            vt_mal = uc.get("virustotal_malicious_count")
+            vt_tot = uc.get("virustotal_total_vendors")
+            vt_status = f"{vt_mal}/{vt_tot} malicious" if vt_mal is not None else "unverified/failed"
+            from_c = " (cached)" if uc.get("from_cache") else ""
+            logger.info("[%s] Reputation URL: %s | SafeBrowsing: %s | VirusTotal: %s%s", safe_id, url_str, sb_flag, vt_status, from_c)
+        for ac in reputation.get("attachment_checks", []):
+            att_name = ac.get("filename", "")
+            vt_mal = ac.get("virustotal_malicious_count")
+            vt_tot = ac.get("virustotal_total_vendors")
+            vt_status = f"{vt_mal}/{vt_tot} malicious" if vt_mal is not None else "unverified/failed"
+            from_c = " (cached)" if ac.get("from_cache") else ""
+            logger.info("[%s] Reputation Attachment: %s | VirusTotal: %s%s", safe_id, att_name, vt_status, from_c)
         logger.info("[%s] Reputation: Flag=%s (URLs: %d, Attachments: %d)", safe_id, reputation.get("overall_reputation_flag"), len(reputation.get("url_checks", [])), len(reputation.get("attachment_checks", [])))
     except Exception as exc:
         logger.error("[%s] Reputation module failed: %s", safe_id, exc)
@@ -207,11 +234,11 @@ def process_single_email(
         ):
             try:
                 city_name = g.get("city")
-                if not city_name or str(city_name).strip() == "":
-                    city_name = str(g.get("country") or "Unknown")
+                if city_name is not None:
+                    city_name = str(city_name).strip() or None
                 geolocation_data = {
                     "country": str(g["country"]),
-                    "city": str(city_name),
+                    "city": city_name,
                     "lat": float(g["lat"]),
                     "long": float(g["long"]),
                 }
@@ -220,7 +247,7 @@ def process_single_email(
 
     dashboard_item = {
         "message_id": safe_id,
-        "subject": parsed_data.get("subject", "") or "(No Subject)",
+        "subject": decode_subject(parsed_data.get("subject")),
         "from": format_sender(parsed_data.get("from")),
         "date": to_iso_date(parsed_data.get("date")),
         "risk_score": float(risk_result["risk_score"]),

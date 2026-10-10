@@ -83,6 +83,7 @@ def test_get_alerts_list_status_and_schema():
             geo = alert["geolocation"]
             assert "country" in geo
             assert "city" in geo
+            assert geo["city"] is None or isinstance(geo["city"], str)
             assert "lat" in geo
             assert "long" in geo
             assert isinstance(geo["lat"], (int, float))

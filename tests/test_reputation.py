@@ -159,3 +159,36 @@ def test_empty_email_output(db):
     assert result["url_checks"] == []
     assert result["attachment_checks"] == []
     assert result["overall_reputation_flag"] == "unknown"
+
+
+# ─── 7. Non-200 / failed VirusTotal response produces 'unknown', not 'clean' ─
+
+def test_virustotal_non_200_failure_results_in_unknown(db, monkeypatch):
+    """
+    Assert that when VirusTotal returns a non-200 status code (e.g. 500, 400, or 429),
+    the URL check records virustotal_malicious_count as None and the overall
+    reputation flag evaluates to 'unknown', NEVER falsely marking the email 'clean'.
+    """
+    monkeypatch.setenv("VIRUSTOTAL_API_KEY", "dummy_key")
+    mock_resp = MagicMock()
+    mock_resp.status_code = 500
+    mock_resp.text = "Internal Server Error"
+
+    email_data = {
+        "message_id": "vt_fail_001",
+        "links": ["https://suspicious-site.example.com"],
+        "attachments": [],
+    }
+
+    with patch("requests.get", return_value=mock_resp), \
+         patch("requests.post", return_value=mock_resp), \
+         patch("reputation.safe_browsing_client.check_urls", return_value={"https://suspicious-site.example.com": []}):
+        result = process_email(email_data, db)
+
+    assert len(result["url_checks"]) == 1
+    uc = result["url_checks"][0]
+    assert uc["virustotal_malicious_count"] is None
+    assert uc["virustotal_total_vendors"] is None
+    # Must NOT be clean — failed verification must be unknown
+    assert result["overall_reputation_flag"] == "unknown"
+

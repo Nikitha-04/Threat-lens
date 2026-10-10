@@ -2,8 +2,17 @@ import email
 import hashlib
 import os
 import re
+from email.header import decode_header, make_header
 from email.utils import parseaddr, getaddresses
 from bs4 import BeautifulSoup
+
+def decode_rfc2047(header_val):
+    if not header_val:
+        return ""
+    try:
+        return str(make_header(decode_header(header_val))).strip()
+    except Exception:
+        return str(header_val).strip()
 
 def sanitize_filename(filename):
     if not filename:
@@ -130,7 +139,7 @@ def parse_email(raw_bytes: bytes, attachments_dir="./data/attachments"):
         "from": {"name": from_name, "email": from_email},
         "to": to_list,
         "reply_to": msg.get("Reply-To"),
-        "subject": msg.get("Subject", ""),
+        "subject": decode_rfc2047(msg.get("Subject", "")),
         "raw_headers": raw_headers,
         "received_chain": received_chain,
         "body_text": body_text.strip(),

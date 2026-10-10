@@ -49,7 +49,7 @@ class RiskTier(str, Enum):
 
 class Geolocation(BaseModel):
     country: str
-    city: str
+    city: Optional[str] = None
     lat: float
     long: float
 

@@ -155,7 +155,7 @@ export const AlertDetailModal: React.FC<AlertDetailModalProps> = ({ alert, onClo
                   <div className="geo-info-grid">
                     <div className="geo-item">
                       <span className="geo-lbl">City</span>
-                      <span className="geo-val">{alert.geolocation.city}</span>
+                      <span className="geo-val">{alert.geolocation.city || 'N/A'}</span>
                     </div>
                     <div className="geo-item">
                       <span className="geo-lbl">Country Code</span>
