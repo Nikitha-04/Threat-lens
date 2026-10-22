@@ -6,6 +6,7 @@ ingest -> forensics -> geo -> classify -> reputation -> risk_score -> dashboard
 from __future__ import annotations
 
 import argparse
+import email
 import hashlib
 import json
 import logging
@@ -69,6 +70,20 @@ def decode_subject(subject_val: str | None) -> str:
         return str(subject_val).strip() or "(No Subject)"
 
 
+def extract_safe_message_id(raw_bytes: bytes) -> str:
+    """Quickly extract sanitized message_id from raw email bytes without full parsing."""
+    try:
+        msg = email.message_from_bytes(raw_bytes)
+        mid = msg.get("Message-ID", "")
+        if mid:
+            safe = sanitize_filename(mid.strip("<>"))
+            if safe and safe != "unnamed":
+                return safe
+    except Exception:
+        pass
+    return hashlib.sha256(raw_bytes).hexdigest()
+
+
 def ensure_directories(base_dir: str = "./data") -> dict[str, str]:
     """Ensure all required pipeline directories exist and return their paths."""
     dirs = {
@@ -95,11 +110,26 @@ def process_single_email(
     rep_cache: ReputationCache,
     weights: dict,
     generate_pdfs: bool = True,
+    force: bool = False,
 ) -> dict | None:
     """
     Execute all analytical stages for a single raw email with graceful error handling.
     Returns the combined dashboard-ready dictionary, or None if ingestion parsing fails.
+    If force is False and dashboard output already exists, skips analytical modules.
     """
+    # ── Fast Skip Check if Already Processed ─────────────────────────────────
+    if not force:
+        quick_id = extract_safe_message_id(raw_bytes)
+        quick_dash_path = os.path.join(dirs["dashboard"], f"{quick_id}.json")
+        if os.path.exists(quick_dash_path):
+            try:
+                with open(quick_dash_path, "r", encoding="utf-8") as f:
+                    existing_data = json.load(f)
+                logger.info("[%s] Already processed in dashboard. Skipping (use --force to reprocess).", quick_id)
+                return existing_data
+            except Exception:
+                pass
+
     # ── 1. Ingestion & Email Parsing ──────────────────────────────────────────
     try:
         parsed_data = parse_email(raw_bytes, attachments_dir=dirs["attachments"])
@@ -110,6 +140,16 @@ def process_single_email(
     safe_id = sanitize_filename(parsed_data.get("message_id"))
     if not safe_id or safe_id == "unnamed":
         safe_id = hashlib.sha256(raw_bytes).hexdigest()
+
+    dash_path = os.path.join(dirs["dashboard"], f"{safe_id}.json")
+    if not force and os.path.exists(dash_path):
+        try:
+            with open(dash_path, "r", encoding="utf-8") as f:
+                existing_data = json.load(f)
+            logger.info("[%s] Already processed in dashboard. Skipping (use --force to reprocess).", safe_id)
+            return existing_data
+        except Exception:
+            pass
 
     parsed_path = os.path.join(dirs["parsed"], f"{safe_id}.json")
     with open(parsed_path, "w", encoding="utf-8") as f:
@@ -195,25 +235,38 @@ def process_single_email(
         "reputation": reputation is not None,
     }
 
-    risk_result = compute_risk(forensics, geo, classified, reputation)
-    risk_result["message_id"] = safe_id
-    risk_result["data_completeness"] = completeness
-
-    # Append transparent notes for any module that failed
-    for mod_name, present in completeness.items():
-        if not present:
-            risk_result["contributing_factors"].append(
-                f"Best-effort assessment: {mod_name} module data unavailable"
-            )
+    try:
+        risk_result = compute_risk(forensics, geo, classified, reputation)
+        risk_result["message_id"] = safe_id
+        risk_result["data_completeness"] = completeness
+        # Note missing module factors if any module failed
+        if not completeness["reputation"]:
+            risk_result["contributing_factors"].append("reputation module data unavailable")
+        if not completeness["forensics"]:
+            risk_result["contributing_factors"].append("forensics module data unavailable")
+        if not completeness["geolocation"]:
+            risk_result["contributing_factors"].append("geolocation module data unavailable")
+        if not completeness["classification"]:
+            risk_result["contributing_factors"].append("classification module data unavailable")
+    except Exception as exc:
+        logger.error("[%s] Risk scoring engine failed: %s", safe_id, exc)
+        risk_result = {
+            "message_id": safe_id,
+            "risk_score": 0.0,
+            "risk_tier": "low",
+            "contributing_factors": [f"Risk scoring failure: {exc}"],
+            "component_scores": {},
+            "data_completeness": completeness,
+        }
 
     risk_path = os.path.join(dirs["risk"], f"{safe_id}.json")
     with open(risk_path, "w", encoding="utf-8") as f:
         json.dump(risk_result, f, indent=2, ensure_ascii=False)
 
-    tier = risk_result["risk_tier"]
-    score = risk_result["risk_score"]
-    logger.info("[%s] Risk Score: %.1f [%s]", safe_id, score, tier.upper())
+    tier = risk_result.get("risk_tier", "low")
+    logger.info("[%s] Risk Score: %.1f [%s]", safe_id, risk_result.get("risk_score", 0.0), tier.upper())
 
+    # Generate PDF forensics report for medium, high, or critical risks
     if generate_pdfs and tier in ("medium", "high", "critical"):
         pdf_path = os.path.join(dirs["reports"], f"{safe_id}.pdf")
         try:
@@ -256,7 +309,6 @@ def process_single_email(
         "geolocation": geolocation_data,
     }
 
-    dash_path = os.path.join(dirs["dashboard"], f"{safe_id}.json")
     with open(dash_path, "w", encoding="utf-8") as f:
         json.dump(dashboard_item, f, indent=2, ensure_ascii=False)
 
@@ -265,10 +317,12 @@ def process_single_email(
 
 def run_pipeline(
     source: str = "imap",
-    limit: int = 20,
+    limit: int = 50,
     since: str | None = None,
     file_path: str | None = None,
     data_dir: str = "./data",
+    folders: str = "inbox,spam",
+    force: bool = False,
 ) -> list[dict]:
     """
     Main pipeline entry point. Fetches emails from source and runs them through
@@ -296,7 +350,16 @@ def run_pipeline(
     if source == "imap":
         from parsers.imap_client import IMAPClient
         client = IMAPClient()
-        email_generator = client.fetch_emails(limit=limit, since_date=since)
+        folder_counts = client.log_folder_status()
+
+        # Log estimated runtime if email volume is non-trivial
+        total_queued = sum(folder_counts.values()) if limit == 0 else min(sum(folder_counts.values()), limit)
+        if total_queued > 10:
+            # VT allows 4 req/min; assuming average of 1-2 new links per email
+            est_minutes = max(1, round(total_queued * 1.5 / 4))
+            logger.info("Estimated runtime for ~%d emails with VirusTotal rate limits (4 req/min): ~%d-%d min", total_queued, est_minutes, est_minutes * 2)
+
+        email_generator = client.fetch_emails(limit=limit, since_date=since, folders=folders)
     elif source == "gmail":
         from parsers.gmail_client import GmailClient
         client = GmailClient()
@@ -311,7 +374,8 @@ def run_pipeline(
     else:
         raise ValueError(f"Unknown source: {source}")
 
-    logger.info("Starting ThreatLens Pipeline (source=%s, limit=%d)", source, limit)
+    limit_desc = "no limit (all)" if limit == 0 else str(limit)
+    logger.info("Starting ThreatLens Pipeline (source=%s, folders=%s, limit=%s, force=%s)", source, folders, limit_desc, force)
     processed_items = []
     count = 0
 
@@ -326,6 +390,7 @@ def run_pipeline(
             rep_cache=rep_cache,
             weights=weights,
             generate_pdfs=True,
+            force=force,
         )
         if result:
             processed_items.append(result)
@@ -339,7 +404,9 @@ def run_pipeline(
 
 def main():
     parser = argparse.ArgumentParser(description="ThreatLens end-to-end pipeline orchestrator.")
-    parser.add_argument("--limit", type=int, default=20, help="Max emails to fetch and process (default: 20)")
+    parser.add_argument("--limit", type=int, default=50, help="Max emails to fetch and process (default: 50, 0 = no limit)")
+    parser.add_argument("--folders", type=str, default="inbox,spam", help="Comma-separated IMAP folders to scan: inbox, spam, all (default: inbox,spam)")
+    parser.add_argument("--force", action="store_true", help="Force reprocessing of emails already present in data/dashboard")
     parser.add_argument("--source", choices=["imap", "gmail", "file"], default="imap", help="Email source (default: imap)")
     parser.add_argument("--file", type=str, help="File path if source is file")
     parser.add_argument("--since", type=str, help="Fetch emails since date")
@@ -352,6 +419,8 @@ def main():
         since=args.since,
         file_path=args.file,
         data_dir=args.data_dir,
+        folders=args.folders,
+        force=args.force,
     )
 
 
