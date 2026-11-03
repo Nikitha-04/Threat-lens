@@ -84,3 +84,21 @@ def test_attachment_sha256_length(sample_eml, temp_attach_dir):
         sha256_hash = att['sha256']
         assert len(sha256_hash) == 64
         assert all(c in '0123456789abcdef' for c in sha256_hash)
+
+
+def test_deduplicate_links_tracking_params():
+    from parsers.email_parser import deduplicate_links
+    raw_urls = [
+        "https://example.com/welcome?utm_source=newsletter&utm_medium=email",
+        "https://example.com/welcome?utm_campaign=winter_promo",
+        "https://example.com/welcome",
+        "https://example.com/other-page?utm_source=twitter",
+        "https://example.com/other-page",
+        "https://example.com/search?q=threats",
+    ]
+    deduped = deduplicate_links(raw_urls)
+    # The 3 /welcome variants collapse into 1, the 2 /other-page variants collapse into 1, /search?q=threats stays
+    assert len(deduped) == 3
+    assert deduped[0] == "https://example.com/welcome?utm_source=newsletter&utm_medium=email"
+    assert deduped[1] == "https://example.com/other-page?utm_source=twitter"
+    assert deduped[2] == "https://example.com/search?q=threats"

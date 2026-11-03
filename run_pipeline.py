@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from dateutil import parser as date_parser
 from dotenv import load_dotenv
@@ -87,6 +88,7 @@ def extract_safe_message_id(raw_bytes: bytes) -> str:
 def ensure_directories(base_dir: str = "./data") -> dict[str, str]:
     """Ensure all required pipeline directories exist and return their paths."""
     dirs = {
+        "raw": os.path.join(base_dir, "raw"),
         "parsed": os.path.join(base_dir, "parsed"),
         "attachments": os.path.join(base_dir, "attachments"),
         "forensics": os.path.join(base_dir, "forensics"),
@@ -111,6 +113,7 @@ def process_single_email(
     weights: dict,
     generate_pdfs: bool = True,
     force: bool = False,
+    fast_mode: bool = False,
 ) -> dict | None:
     """
     Execute all analytical stages for a single raw email with graceful error handling.
@@ -204,16 +207,22 @@ def process_single_email(
     # ── 5. Reputation Analysis (VirusTotal & Safe Browsing) ────────────────────
     reputation = None
     try:
-        reputation = reputation_process_email(parsed_data, rep_cache)
+        try:
+            reputation = reputation_process_email(parsed_data, rep_cache, fast_mode=fast_mode)
+        except TypeError:
+            reputation = reputation_process_email(parsed_data, rep_cache)
         rep_path = os.path.join(dirs["reputation"], f"{safe_id}.json")
         with open(rep_path, "w", encoding="utf-8") as f:
             json.dump(reputation, f, indent=2, ensure_ascii=False)
         for uc in reputation.get("url_checks", []):
             url_str = uc.get("url", "")
             sb_flag = "FLAGGED" if uc.get("safe_browsing_flagged") else "clean"
-            vt_mal = uc.get("virustotal_malicious_count")
-            vt_tot = uc.get("virustotal_total_vendors")
-            vt_status = f"{vt_mal}/{vt_tot} malicious" if vt_mal is not None else "unverified/failed"
+            if not uc.get("virustotal_checked", True):
+                vt_status = "not checked (fast mode)"
+            else:
+                vt_mal = uc.get("virustotal_malicious_count")
+                vt_tot = uc.get("virustotal_total_vendors")
+                vt_status = f"{vt_mal}/{vt_tot} malicious" if vt_mal is not None else "unverified/failed"
             from_c = " (cached)" if uc.get("from_cache") else ""
             logger.info("[%s] Reputation URL: %s | SafeBrowsing: %s | VirusTotal: %s%s", safe_id, url_str, sb_flag, vt_status, from_c)
         for ac in reputation.get("attachment_checks", []):
@@ -323,10 +332,15 @@ def run_pipeline(
     data_dir: str = "./data",
     folders: str = "inbox,spam",
     force: bool = False,
+    fast: bool | None = None,
+    full: bool = False,
 ) -> list[dict]:
     """
-    Main pipeline entry point. Fetches emails from source and runs them through
-    all threat detection stages, saving dashboard-ready JSONs.
+    Main pipeline entry point.
+    1. Downloads raw emails first into ./data/raw/{message_id}.eml and closes connection.
+    2. Runs analytical modules from saved messages.
+    3. Handles fast vs full reputation checks.
+    4. Logs rolling ETA and prints a comprehensive run summary.
     """
     load_dotenv()
     dirs = ensure_directories(data_dir)
@@ -346,59 +360,167 @@ def run_pipeline(
 
     rep_cache = ReputationCache(db_path)
 
-    # Email generator selection
+    # ── Phase 1: Download First ──────────────────────────────────────────────
     if source == "imap":
         from parsers.imap_client import IMAPClient
         client = IMAPClient()
         folder_counts = client.log_folder_status()
-
-        # Log estimated runtime if email volume is non-trivial
-        total_queued = sum(folder_counts.values()) if limit == 0 else min(sum(folder_counts.values()), limit)
-        if total_queued > 10:
-            # VT allows 4 req/min; assuming average of 1-2 new links per email
-            est_minutes = max(1, round(total_queued * 1.5 / 4))
-            logger.info("Estimated runtime for ~%d emails with VirusTotal rate limits (4 req/min): ~%d-%d min", total_queued, est_minutes, est_minutes * 2)
-
-        email_generator = client.fetch_emails(limit=limit, since_date=since, folders=folders)
+        saved_emails, folder_status = client.download_emails(
+            raw_dir=dirs["raw"],
+            limit=limit,
+            since_date=since,
+            folders=folders,
+        )
     elif source == "gmail":
         from parsers.gmail_client import GmailClient
         client = GmailClient()
-        email_generator = client.fetch_emails(limit=limit, since_date=since)
+        saved_emails = []
+        for raw_bytes in client.fetch_emails(limit=limit, since_date=since):
+            safe_id = extract_safe_message_id(raw_bytes)
+            eml_path = os.path.join(dirs["raw"], f"{safe_id}.eml")
+            with open(eml_path, "wb") as f:
+                f.write(raw_bytes)
+            saved_emails.append({
+                "message_id": safe_id,
+                "folder": "GMAIL",
+                "eml_path": eml_path,
+                "raw_bytes": raw_bytes,
+            })
+        folder_status = {"GMAIL": {"fully_read": True, "read": len(saved_emails), "expected": len(saved_emails), "error": None}}
     elif source == "file":
         if not file_path:
             raise ValueError("--file path is required when source is 'file'")
-        def _file_gen():
-            with open(file_path, "rb") as f:
-                yield f.read()
-        email_generator = _file_gen()
+        with open(file_path, "rb") as f:
+            raw_bytes = f.read()
+        safe_id = extract_safe_message_id(raw_bytes)
+        eml_path = os.path.join(dirs["raw"], f"{safe_id}.eml")
+        with open(eml_path, "wb") as f:
+            f.write(raw_bytes)
+        saved_emails = [{
+            "message_id": safe_id,
+            "folder": "FILE",
+            "eml_path": eml_path,
+            "raw_bytes": raw_bytes,
+        }]
+        folder_status = {"FILE": {"fully_read": True, "read": 1, "expected": 1, "error": None}}
     else:
         raise ValueError(f"Unknown source: {source}")
 
-    limit_desc = "no limit (all)" if limit == 0 else str(limit)
-    logger.info("Starting ThreatLens Pipeline (source=%s, folders=%s, limit=%s, force=%s)", source, folders, limit_desc, force)
-    processed_items = []
-    count = 0
+    total_emails = len(saved_emails)
 
-    for raw_bytes in email_generator:
-        count += 1
-        logger.info("==================== Processing Email #%d ====================", count)
-        result = process_single_email(
-            raw_bytes=raw_bytes,
-            dirs=dirs,
-            db=db,
-            maxmind=maxmind,
-            rep_cache=rep_cache,
-            weights=weights,
-            generate_pdfs=True,
-            force=force,
-        )
-        if result:
-            processed_items.append(result)
+    # ── Determine Fast Mode vs Full Mode ─────────────────────────────────────
+    if full:
+        fast_mode = False
+    elif fast is True:
+        fast_mode = True
+    else:
+        # Default for runs over 20 emails
+        fast_mode = (total_emails > 20) or (limit == 0) or (limit > 20)
+
+    mode_label = "FAST MODE (Safe Browsing on all, VT capped at 3 suspicious unflagged links)" if fast_mode else "FULL MODE (all links checked on VT)"
+    limit_desc = "no limit (all)" if limit == 0 else str(limit)
+    logger.info("Starting ThreatLens Pipeline (source=%s, folders=%s, limit=%s, force=%s, mode=%s)", source, folders, limit_desc, force, mode_label)
+
+    # Log any folder read failures
+    for f_name, f_stat in folder_status.items():
+        if not f_stat.get("fully_read", False):
+            logger.error(
+                "Folder '%s' could not be fully read: read %d of %d expected messages. Error: %s",
+                f_name, f_stat.get("read", 0), f_stat.get("expected", 0), f_stat.get("error")
+            )
+
+    # ── Phase 2: Analysis Loop ────────────────────────────────────────────────
+    processed_items = []
+    skipped_count = 0
+    newly_processed_count = 0
+    failed_items = []
+
+    loop_start = time.monotonic()
+
+    for idx, item in enumerate(saved_emails, 1):
+        safe_id = item["message_id"]
+        folder = item["folder"]
+        raw_bytes = item["raw_bytes"]
+
+        # Calculate rolling estimated time remaining
+        elapsed = time.monotonic() - loop_start
+        if idx > 1 and elapsed > 0:
+            avg_sec = elapsed / (idx - 1)
+            remaining_sec = (total_emails - (idx - 1)) * avg_sec
+            if remaining_sec < 60:
+                est_str = f"~{int(remaining_sec)}s remaining"
+            elif remaining_sec < 3600:
+                est_str = f"~{int(remaining_sec // 60)}m {int(remaining_sec % 60)}s remaining"
+            else:
+                est_str = f"~{remaining_sec / 3600:.1f}h remaining"
+        else:
+            est_str = "estimating time remaining..."
+
+        logger.info("==================== Email %d/%d (%s) [%s] ====================", idx, total_emails, folder, est_str)
+
+        dash_path = os.path.join(dirs["dashboard"], f"{safe_id}.json")
+        is_already_done = (not force) and os.path.exists(dash_path)
+
+        try:
+            result = process_single_email(
+                raw_bytes=raw_bytes,
+                dirs=dirs,
+                db=db,
+                maxmind=maxmind,
+                rep_cache=rep_cache,
+                weights=weights,
+                generate_pdfs=True,
+                force=force,
+                fast_mode=fast_mode,
+            )
+            if result:
+                processed_items.append(result)
+                if is_already_done:
+                    skipped_count += 1
+                else:
+                    newly_processed_count += 1
+            else:
+                failed_items.append({"message_id": safe_id, "reason": "Failed to parse email"})
+        except Exception as exc:
+            logger.exception("[%s] Unexpected error processing email: %s", safe_id, exc)
+            failed_items.append({"message_id": safe_id, "reason": str(exc)})
 
     if hasattr(maxmind, "close"):
         maxmind.close()
 
-    logger.info("Pipeline completed. Processed %d email(s) into %s", len(processed_items), dirs["dashboard"])
+    # ── Final Summary ─────────────────────────────────────────────────────────
+    summary_lines = [
+        "",
+        "=" * 80,
+        "                           PIPELINE EXECUTION SUMMARY",
+        "=" * 80,
+        f"Fetched:                      {total_emails}",
+        f"Already processed (skipped):  {skipped_count}",
+        f"Newly processed:              {newly_processed_count}",
+        f"Failed:                       {len(failed_items)}",
+        "-" * 80,
+        "Folder Status:",
+    ]
+    for f_name, f_stat in folder_status.items():
+        r_cnt = f_stat.get("read", 0)
+        e_cnt = f_stat.get("expected", 0)
+        is_full = f_stat.get("fully_read", False)
+        status_label = "Fully read" if is_full else f"PARTIALLY READ (Error: {f_stat.get('error')})"
+        summary_lines.append(f"  - {f_name}: {status_label} ({r_cnt}/{e_cnt} messages)")
+
+    summary_lines.append("-" * 80)
+    if failed_items:
+        summary_lines.append("Failed Emails Details:")
+        for item in failed_items:
+            summary_lines.append(f"  - ID: {item['message_id']} | Reason: {item['reason']}")
+    else:
+        summary_lines.append("Failed Emails Details:\n  None (all emails processed successfully)")
+    summary_lines.append("=" * 80)
+
+    summary_text = "\n".join(summary_lines)
+    print(summary_text, flush=True)
+    logger.info("Pipeline completed. Fetched %d, skipped %d, newly processed %d, failed %d.", total_emails, skipped_count, newly_processed_count, len(failed_items))
+
     return processed_items
 
 
@@ -407,6 +529,8 @@ def main():
     parser.add_argument("--limit", type=int, default=50, help="Max emails to fetch and process (default: 50, 0 = no limit)")
     parser.add_argument("--folders", type=str, default="inbox,spam", help="Comma-separated IMAP folders to scan: inbox, spam, all (default: inbox,spam)")
     parser.add_argument("--force", action="store_true", help="Force reprocessing of emails already present in data/dashboard")
+    parser.add_argument("--fast", action="store_true", default=None, help="Enable fast reputation mode (Safe Browsing on all, VirusTotal capped at 3 suspicious unflagged links)")
+    parser.add_argument("--full", action="store_true", default=False, help="Force full reputation mode (check all links on VirusTotal)")
     parser.add_argument("--source", choices=["imap", "gmail", "file"], default="imap", help="Email source (default: imap)")
     parser.add_argument("--file", type=str, help="File path if source is file")
     parser.add_argument("--since", type=str, help="Fetch emails since date")
@@ -421,6 +545,8 @@ def main():
         data_dir=args.data_dir,
         folders=args.folders,
         force=args.force,
+        fast=args.fast,
+        full=args.full,
     )
 
 

@@ -144,9 +144,13 @@ def score_reputation(reputation: dict | None) -> tuple[float, list[str]]:
 
     factors: list[str] = []
     raw = 0.0
+    has_vt_skipped = False
 
     for uc in reputation.get("url_checks", []) or []:
         url = uc.get("url", "")
+        if uc.get("virustotal_checked") is False:
+            has_vt_skipped = True
+
         if uc.get("safe_browsing_flagged"):
             threats = ", ".join(uc.get("safe_browsing_threat_types", []))
             factors.append(f"URL flagged by Safe Browsing ({threats}): {url}")
@@ -159,6 +163,9 @@ def score_reputation(reputation: dict | None) -> tuple[float, list[str]]:
         elif mal >= 1:
             factors.append(f"URL suspicious on VirusTotal ({mal}/{total} vendors): {url}")
             raw += 25
+
+    if has_vt_skipped:
+        factors.append("VirusTotal not checked (fast mode)")
 
     for ac in reputation.get("attachment_checks", []) or []:
         mal = ac.get("virustotal_malicious_count") or 0

@@ -192,3 +192,59 @@ def test_virustotal_non_200_failure_results_in_unknown(db, monkeypatch):
     # Must NOT be clean — failed verification must be unknown
     assert result["overall_reputation_flag"] == "unknown"
 
+
+# ─── 8. Fast mode caps unflagged VT checks and sets virustotal_checked=False ──
+
+def test_fast_mode_caps_unflagged_links_and_marks_checked_false(db):
+    """
+    In fast mode:
+    - Safe Browsing runs on all links.
+    - At most 3 unflagged links are sent to VirusTotal based on suspicion.
+    - Skipped links have virustotal_checked = False and VT counts as None.
+    - Contributing factors receives 'VirusTotal not checked (fast mode)'.
+    """
+    from risk.scoring import score_reputation
+
+    email_data = {
+        "message_id": "fast_mode_001",
+        "from": "alerts@google.com",
+        "links": [
+            "https://bit.ly/suspicious-shortener",       # Shortener -> suspicion 100
+            "http://192.168.1.100/login",                # IP host -> suspicion 100
+            "https://attacker-domain.com/long/random/path/abcdef0123456789", # diff domain + random -> suspicion 95
+            "https://google.com/help",                   # same domain, clean -> low suspicion
+            "https://google.com/about",                  # same domain, clean -> low suspicion
+        ],
+        "attachments": [],
+    }
+
+    mock_gsb_clean = {u: [] for u in email_data["links"]}
+    with patch("reputation.safe_browsing_client.check_urls", return_value=mock_gsb_clean), \
+         patch("reputation.virustotal_client.check_url", return_value=(0, 0, 72)) as mock_vt:
+        result = process_email(email_data, db, fast_mode=True)
+
+    # All 5 links must have records
+    assert len(result["url_checks"]) == 5
+
+    # Top 3 suspicious links were checked on VT
+    checked_urls = [uc["url"] for uc in result["url_checks"] if uc["virustotal_checked"] is True]
+    skipped_urls = [uc["url"] for uc in result["url_checks"] if uc["virustotal_checked"] is False]
+
+    assert len(checked_urls) == 3
+    assert len(skipped_urls) == 2
+    assert "https://bit.ly/suspicious-shortener" in checked_urls
+    assert "http://192.168.1.100/login" in checked_urls
+    assert "https://attacker-domain.com/long/random/path/abcdef0123456789" in checked_urls
+
+    # Skipped links have null VT fields and virustotal_checked: False
+    for uc in result["url_checks"]:
+        if uc["url"] in skipped_urls:
+            assert uc["virustotal_checked"] is False
+            assert uc["virustotal_malicious_count"] is None
+            assert uc["virustotal_suspicious_count"] is None
+            assert uc["virustotal_total_vendors"] is None
+
+    # Check contributing factor
+    _, factors = score_reputation(result)
+    assert "VirusTotal not checked (fast mode)" in factors
+
